@@ -1,8 +1,10 @@
 import com.sun.istack.internal.NotNull;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -13,7 +15,7 @@ import java.util.concurrent.ForkJoinPool;
  */
 public class Huffman {
 
-    public void encode(@NotNull InputStream inputStream, @NotNull OutputStream outputStream) throws IOException {
+    public  ByteArrayOutputStream[] encode(@NotNull InputStream inputStream) throws IOException {
         String text = "";
         int bytes = inputStream.read();
         final int[] characters = new int[256];
@@ -22,44 +24,47 @@ public class Huffman {
             text += (char)bytes;
             bytes = inputStream.read();
         }
-        ++characters[1]; //escape char
+        ++characters[2]; //escape character
 
+        int m = Runtime.getRuntime().availableProcessors();
+        ByteArrayOutputStream[] outputStream = new ByteArrayOutputStream[((text.length()%m == 0)? m : m + 1) + 1];
+        for (int i = 0; i < outputStream.length ; i++) {
+            outputStream[i] = new ByteArrayOutputStream();
+        }
         PriorityQueue<Node<Tuple<Integer, Character>>> queue = buildTree(characters);
         HashMap<Character,Bits> map = new HashMap<>();
         buildAndWriteTable(outputStream, queue.remove(), new Bits(),map);
-        writeCode(outputStream, text, map);
+        writeCode(outputStream, text, map, m);
+        return outputStream;
     }
 
 
-    public void decode(@NotNull InputStream inputStream, @NotNull OutputStream outputStream) throws IOException {
-        int bytes = inputStream.read();
+    public ByteArrayOutputStream decode(@NotNull InputStream[] inputStream) throws IOException {
+        int bytes = inputStream[0].read();
         HashMap<String, Character> map = new HashMap<>();
 
-        rebuildTable(inputStream, bytes, map);
+        rebuildTable(inputStream[0], bytes, map);
 
-        bytes = inputStream.read();
+        bytes = inputStream[0].read();
         int multiplier = 0;
         while(bytes != (char)1){
             multiplier += bytes;
-            bytes = inputStream.read();
+            bytes = inputStream[0].read();
         }
-        int length = 255*multiplier + inputStream.read();
+        int length = 255*multiplier + inputStream[0].read();
 
-        Bits bits = new Bits();
-        bytes = inputStream.read();
-        loop: //Only for Coverage. On line 110 Instead "break loop;", it was "return;", but the last line of the Decode Method didn't count for coverage because it never reached that line.
-        while(bytes != -1){
-            for (int i = 0; i < 8; i++) {
-                bits.add(bitAt(bytes, i));
-                if (map.containsKey(bits.toString())){
-                    outputStream.write(map.get(bits.toString()));
-                    bits = new Bits();
-                    --length;
-                    if (length == 0) break loop;
-                }
-            }
-            bytes = inputStream.read();
+        int m = Runtime.getRuntime().availableProcessors();
+        ByteArrayOutputStream[] outputStream = new ByteArrayOutputStream[((length%m == 0)? m : m + 1) /*+ 1*/];
+        for (int i = 0; i < outputStream.length ; i++) {
+            outputStream[i] = new ByteArrayOutputStream();
         }
+        ForkJoinPool.commonPool().invoke(new ParallelDecoder(inputStream, outputStream, map, 1));
+
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        for(ByteArrayOutputStream os : outputStream){
+            o.write(os.toByteArray());
+        }
+        return o;
     }
 
 
@@ -84,12 +89,12 @@ public class Huffman {
     }
 
 
-    private void buildAndWriteTable(OutputStream outputStream, Node<Tuple<Integer, Character>> tree, Bits bitsLeft, Map<Character,Bits> map) throws IOException {
+    private void buildAndWriteTable(OutputStream[] outputStream, Node<Tuple<Integer, Character>> tree, Bits bitsLeft, Map<Character,Bits> map) throws IOException {
         if (tree == null) return;
         if (tree.isLeaf())  {
             map.put(tree.value.secondValue,bitsLeft);
-            outputStream.write(tree.value.secondValue);
-            bitsLeft.writeInto(outputStream);
+            outputStream[0].write(tree.value.secondValue);
+            bitsLeft.writeInto(outputStream[0]);
             return;
         }
         Bits bitsRight = bitsLeft.copy();
@@ -100,28 +105,22 @@ public class Huffman {
     }
 
 
-    private void writeCode(OutputStream outputStream, String text, HashMap<Character, Bits> map) throws IOException {
-        outputStream.write((char)1);
+    private void writeCode(OutputStream[] outputStream, String text, HashMap<Character, Bits> map, int m) throws IOException {
+        outputStream[0].write((char)1);
         int multiplier = text.length()/255;
         while(multiplier > 255){
-            outputStream.write(255);
+            outputStream[0].write(255);
             multiplier -= 255;
         }
-        outputStream.write(multiplier);
-        outputStream.write((char)1);
-        outputStream.write(text.length()%255);
+        outputStream[0].write(multiplier);
+        outputStream[0].write((char)1);
+        outputStream[0].write(text.length()%255);
 
-        int m = Runtime.getRuntime().availableProcessors();
-        BitsOutputStream[] outputInOrder = new BitsOutputStream[(text.length()%m == 0)? m : m + 1];
-        ForkJoinPool.commonPool().invoke(new ParallelHuffman(outputStream, text, map, outputInOrder, 0, 0, text.length()/m));
-        for (int i = 0; i < outputInOrder.length ; i++) {
-            outputStream.write(outputInOrder[i].toByteArray());
-        }
-
+        ForkJoinPool.commonPool().invoke(new ParallelEncoder(outputStream, text, map, 0, 0, text.length()/m));
     }
 
 
-    private boolean bitAt(int b, int pos){
+    static boolean bitAt(int b, int pos){
         return (b << pos & 0b10000000) == 0b10000000;
     }
 

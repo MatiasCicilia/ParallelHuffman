@@ -8,20 +8,18 @@ import java.util.concurrent.RecursiveAction;
 /**
  * Created by Bruno on 20/2/2017.
  */
-public class ParallelHuffman extends RecursiveAction {
-    private OutputStream outputStream;
-    private String text;
-    private HashMap<Character, Bits> map;
-    private BitsOutputStream[] outputInOrder;
-    private int order;
-    private int from;
+public class ParallelEncoder extends RecursiveAction {
+    private final OutputStream[] outputStream;
+    private final String text;
+    private final HashMap<Character, Bits> map;
+    private final int order;
+    private final int from;
     private int SEQUENTIAL_THRESHOLD;
 
-    public ParallelHuffman(OutputStream outputStream, String text, HashMap<Character, Bits> map, BitsOutputStream[] outputInOrder, int order, int from, int SEQUENTIAL_THRESHOLD){
+    public ParallelEncoder(OutputStream[] outputStream, String text, HashMap<Character, Bits> map, /*BitsOutputStream[] outputInOrder,*/ int order, int from, int SEQUENTIAL_THRESHOLD){
         this.outputStream = outputStream;
         this.text = text;
         this.map = map;
-        this.outputInOrder = outputInOrder;
         this.order = order;
         this.from = from;
         this.SEQUENTIAL_THRESHOLD = SEQUENTIAL_THRESHOLD;
@@ -34,10 +32,10 @@ public class ParallelHuffman extends RecursiveAction {
                 SEQUENTIAL_THRESHOLD = text.length() - from;
                 writeCode();
             } else {
-                ParallelHuffman parallelHuffman = new ParallelHuffman(outputStream, text, map, outputInOrder, order+1, from + SEQUENTIAL_THRESHOLD, SEQUENTIAL_THRESHOLD);
-                parallelHuffman.fork();
+                ParallelEncoder parallelEncoder = new ParallelEncoder(outputStream, text, map, /*outputInOrder,*/ order+1, from + SEQUENTIAL_THRESHOLD, SEQUENTIAL_THRESHOLD);
+                parallelEncoder.fork();
                 writeCode();
-                parallelHuffman.join();
+                parallelEncoder.join();
             }
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -49,7 +47,7 @@ public class ParallelHuffman extends RecursiveAction {
         for (int i = from; i < from + SEQUENTIAL_THRESHOLD ; i++) {
             bitsOutputStream.write(map.get(text.charAt(i)));
         }
-        bitsOutputStream.write(map.get((char)1));
-        outputInOrder[order] = bitsOutputStream;
+        bitsOutputStream.write(map.get((char)2));
+        outputStream[order+1].write(bitsOutputStream.toByteArray());
     }
 }
