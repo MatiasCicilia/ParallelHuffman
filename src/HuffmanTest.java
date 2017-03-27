@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Random;
 
 /**
  * Created by Bruno on 22/2/2017.
@@ -19,7 +20,7 @@ public class HuffmanTest {
     public void testEncode() throws IOException {
         final Huffman huffman =  new Huffman();
         final InputStream input = new ByteArrayInputStream("ABARABAR".getBytes());
-        ByteArrayOutputStream[] output = huffman.encode(input);
+        ByteArrayOutputStream[] output = huffman.encode("ABARABAR");
         Assert.assertArrayEquals(new byte[]{'A',1,0,'B',2,(byte)0b10000000,(char)2,3,(byte)0b11000000,'R',3,(byte)0b11100000,(char)1,0,(char)1,8}, output[0].toByteArray());
         Assert.assertArrayEquals(new byte[]{(byte)0b01001111, (byte)0b10000000},output[1].toByteArray());
         Assert.assertArrayEquals(new byte[]{(byte)0b01001111, (byte)0b10000000},output[2].toByteArray());
@@ -27,11 +28,15 @@ public class HuffmanTest {
 
     @Test
     public void testDecode() throws IOException {
-        //final String text = loadHugeText("text.txt"); Texto de 1 millón de Caracteres.
-        final String text = fastTest();
+        String text = loadHugeText("text.txt");
+        //final String text = fastTest();
+        //String text = generateBullshit(1_000_000);
+        System.out.println("Text size "+text.length());
+        text = text.replaceAll("[^\\x00-\\x7F]", " ");
+        System.out.println("Text size "+text.length());
         final Huffman huffman = new Huffman();
-        final InputStream input = new ByteArrayInputStream(text.getBytes());
-        final ByteArrayOutputStream[] auxOutput = huffman.encode(input);
+        //final InputStream input = new ByteArrayInputStream(text.getBytes());
+        final ByteArrayOutputStream[] auxOutput = huffman.encode(text);
         final ByteArrayInputStream[] auxInput = new ByteArrayInputStream[auxOutput.length];
 
         for (int i = 0; i < auxInput.length ; i++) {
@@ -40,6 +45,17 @@ public class HuffmanTest {
 
         Assert.assertEquals(text, huffman.decode(auxInput).toString());
     }
+
+    private String generateBullshit(int size){
+        String bullshit = "";
+        Random random = new Random();
+
+        for(int i =0; i< size;i++){
+            bullshit = bullshit + (char)random.nextInt(255);
+        }
+        return bullshit;
+    }
+
 
     private String loadHugeText(String aFileName) throws IOException {
         String text = "";

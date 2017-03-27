@@ -15,21 +15,19 @@ import java.util.concurrent.ForkJoinPool;
  */
 public class Huffman {
 
-    public  ByteArrayOutputStream[] encode(@NotNull InputStream inputStream) throws IOException {
-        String text = "";
-        int bytes = inputStream.read();
+    public  ByteArrayOutputStream[] encode(String input) throws IOException {
+        String text = input;
+        int i = 0;
         final int[] characters = new int[256];
-        while (bytes != -1){
-            ++characters[bytes];
-            text += (char)bytes;
-            bytes = inputStream.read();
+        while (i < input.length()){
+            ++characters[(byte)input.charAt(i++)];
         }
         ++characters[2]; //escape character
 
         int m = Runtime.getRuntime().availableProcessors();
         ByteArrayOutputStream[] outputStream = new ByteArrayOutputStream[((text.length()%m == 0)? m : m + 1) + 1];
-        for (int i = 0; i < outputStream.length ; i++) {
-            outputStream[i] = new ByteArrayOutputStream();
+        for (int j = 0; j < outputStream.length ; j++) {
+            outputStream[j] = new ByteArrayOutputStream();
         }
         PriorityQueue<Node<Tuple<Integer, Character>>> queue = buildTree(characters);
         HashMap<Character,Bits> map = new HashMap<>();
